@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 
 extension URLSessionTask: Cancellable {}
 
@@ -156,6 +157,39 @@ public class HTTPNetworkTransport: NetworkTransport {
     task.resume()
     
     return task
+  }
+  
+  /// Send a GraphQL operation to a server and return a response.
+  ///
+  /// - Parameters:
+  ///   - operation: The operation to send.
+  /// - Returns:
+  ///   Publisher with Data = GraphQLResponse<Operation> and Failure = Error
+  @available(OSX 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
+  public func send<Operation: GraphQLOperation>(operation: Operation) -> AnyPublisher<GraphQLResponse<Operation>, Error>  {
+    var request = URLRequest(url: url)
+    request.httpMethod = "POST"
+    
+    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    
+    let body = requestBody(for: operation)
+    request.httpBody = try! serializationFormat.serialize(value: body)
+    
+    return session.dataTaskPublisher(for: request)
+      .tryMap({ (data, response) -> GraphQLResponse<Operation> in
+        guard let httpResponse = response as? HTTPURLResponse else {
+          fatalError("Response should be an HTTPURLResponse")
+        }
+        
+        guard httpResponse.isSuccessful else {
+          throw GraphQLHTTPResponseError(body: data, response: httpResponse, kind: .errorResponse)
+        }
+        guard let body =  try self.serializationFormat.deserialize(data: data) as? JSONObject else {
+          throw GraphQLHTTPResponseError(body: data, response: httpResponse, kind: .invalidResponse)
+        }
+        return GraphQLResponse(operation: operation, body: body)
+      })
+      .eraseToAnyPublisher()
   }
 
   private let sendOperationIdentifiers: Bool

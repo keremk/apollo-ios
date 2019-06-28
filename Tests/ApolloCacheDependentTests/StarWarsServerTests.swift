@@ -11,6 +11,13 @@ class StarWarsServerTests: XCTestCase {
       XCTAssertEqual(data.hero?.name, "R2-D2")
     }
   }
+  
+  @available(OSX 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
+  func testHeroNameQueryCombine() {
+    fetchCombine(query: HeroNameQuery()) { data in
+      XCTAssertEqual(data.hero?.name, "R2-D2")
+    }
+  }
 
   func testHeroNameQueryWithVariable() {
     fetch(query: HeroNameQuery(episode: .empire)) { data in
@@ -287,6 +294,32 @@ class StarWarsServerTests: XCTestCase {
         completionHandler(data)
       }
       
+      waitForExpectations(timeout: 5, handler: nil)
+    }
+  }
+  
+  @available(OSX 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
+  private func fetchCombine<Query: GraphQLQuery>(query: Query, completionHandler: @escaping (_ data: Query.Data) -> Void) {
+    withCache { (cache) in
+      let network = HTTPNetworkTransport(url: URL(string: "http://localhost:8080/graphql")!)
+      let store = ApolloStore(cache: cache)
+      let client = ApolloClient(networkTransport: network, store: store)
+
+      let expectation = self.expectation(description: "Fetching query")
+      
+      let publisher = client.fetch(query: query)
+      let canceler = publisher.sink { (result) in
+        defer { expectation.fulfill() }
+        guard let result = result else { XCTFail("No query result");  return }
+
+        if let errors = result.errors {
+          XCTFail("Errors in query result: \(errors)")
+        }
+        
+        guard let data = result.data else { XCTFail("No query result data");  return }
+      
+        completionHandler(data)
+      }
       waitForExpectations(timeout: 5, handler: nil)
     }
   }

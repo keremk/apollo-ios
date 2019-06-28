@@ -1,5 +1,6 @@
 import Foundation
 import Dispatch
+import Combine
 
 /// An object that can be used to cancel an in progress action.
 public protocol Cancellable: class {
@@ -138,6 +139,26 @@ public class ApolloClient {
   /// - Returns: An object that can be used to cancel an in progress subscription.
   @discardableResult public func subscribe<Subscription: GraphQLSubscription>(subscription: Subscription, fetchHTTPMethod: FetchHTTPMethod = .POST, queue: DispatchQueue = DispatchQueue.main, resultHandler: @escaping OperationResultHandler<Subscription>) -> Cancellable {
     return send(operation: subscription, fetchHTTPMethod: fetchHTTPMethod, context: nil, handlerQueue: queue, resultHandler: resultHandler)
+  }
+  
+  // MARK: Publisher type APIs
+  @available(OSX 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
+  public func fetch<Query: GraphQLQuery>(query: Query, cachePolicy: CachePolicy = .returnCacheDataElseFetch, queue: DispatchQueue = DispatchQueue.main) -> AnyPublisher<GraphQLResult<Query.Data>?, Error> {
+    
+    
+    return networkTransport.send(operation: query)
+      .tryMap { (response) -> (GraphQLResult<Query.Data>, RecordSet?) in
+        return try response.parseResult(cacheKeyForObject: self.cacheKeyForObject).await()
+      }
+      .tryMap { (data, records) -> GraphQLResult<Query.Data>? in
+        if let records = records {
+          self.store.publish(records: records, context: nil).catch { error in
+            preconditionFailure(String(describing: error))
+          }
+        }
+        return data
+      }
+      .eraseToAnyPublisher()
   }
   
     
