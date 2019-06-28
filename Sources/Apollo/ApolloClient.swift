@@ -144,9 +144,8 @@ public class ApolloClient {
   // MARK: Publisher type APIs
   @available(OSX 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
   public func fetch<Query: GraphQLQuery>(query: Query, cachePolicy: CachePolicy = .returnCacheDataElseFetch, queue: DispatchQueue = DispatchQueue.main) -> AnyPublisher<GraphQLResult<Query.Data>?, Error> {
-    
-    
     return networkTransport.send(operation: query)
+      .receive(on: queue)
       .tryMap { (response) -> (GraphQLResult<Query.Data>, RecordSet?) in
         return try response.parseResult(cacheKeyForObject: self.cacheKeyForObject).await()
       }
