@@ -307,7 +307,7 @@ class StarWarsServerTests: XCTestCase {
 
       let expectation = self.expectation(description: "Fetching query")
       
-      let publisher = client.fetch(query: query)
+      let publisher = client.publisher(query: query)
       let canceler = publisher.sink { (result) in
         defer { expectation.fulfill() }
         guard let result = result else { XCTFail("No query result");  return }
